@@ -34,10 +34,12 @@ services:
       dockerfile: Dockerfile
     environment:
       DATABASE_URL: postgresql+psycopg://kubsu:kubsu@db:5432/kubsu
+      PYTHONPATH: /app/src
     depends_on:
       db:
         condition: service_healthy
-    command: ["pytest", "tests", "-v"]
+    working_dir: /app
+    command: ["python", "-m", "pytest", "tests", "-v"]
     profiles:
       - test
 
