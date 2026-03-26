@@ -31,11 +31,13 @@ jobs:
           ssh -p 58529 -o StrictHostKeyChecking=no hugle@kubsu.tyvik.ru << 'EOF'
             cd /home/hugle/tasks/docker
             git pull origin master
-            # Остановить старое приложение если запущено
-            pkill -f "uvicorn src.main:app" || true
-            # Установить зависимости
-            pip install -e ".[test]" --user
+            # Остановить своё старое приложение если запущено
+            pkill -u $(whoami) -f "uvicorn src.main:app" 2>/dev/null || true
+            # Установить зависимости через python3 -m pip
+            python3 -m pip install -e "." --user --break-system-packages 2>/dev/null || python3 -m pip install -e "." --user
             # Запустить приложение в фоне
-            nohup python -m uvicorn src.main:app --host 127.0.0.1 --port 8066 > app.log 2>&1 &
+            nohup python3 -m uvicorn src.main:app --host 127.0.0.1 --port 8066 > app.log 2>&1 &
+            sleep 2
+            ps aux | grep uvicorn | grep -v grep || echo "App may not have started"
             echo "Deployed!"
           EOF
