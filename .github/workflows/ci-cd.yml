@@ -28,7 +28,7 @@ jobs:
 
       - name: Deploy to server via SSH
         run: |
-          ssh -p 58529 -o StrictHostKeyChecking=no hugle@192.168.199.9 << 'EOF'
+          ssh -p 58529 -o StrictHostKeyChecking=no hugle@kubsu.tyvik.ru << 'EOF'
             cd /home/hugle/tasks/docker
             git pull origin master
             # Остановить старое приложение если запущено
