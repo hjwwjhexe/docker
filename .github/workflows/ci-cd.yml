@@ -7,22 +7,35 @@ on:
     branches: [master, main]
 
 jobs:
-  test-and-deploy:
-    runs-on: self-hosted
+  test:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Build and test in Docker
         run: |
           docker compose --profile test run --rm test
 
-      - name: Build Docker image for production
-        if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
-        run: |
-          docker build -t docker-app:latest .
+  deploy:
+    needs: test
+    runs-on: self-hosted
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Deploy to production
-        if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+      - name: Deploy to server via SSH
         run: |
-          docker compose -f docker-compose.prod.yml down || true
-          docker compose -f docker-compose.prod.yml up -d
+          ssh -p 58529 -o StrictHostKeyChecking=no hugle@192.168.199.9 << 'EOF'
+            cd /home/hugle/tasks/docker
+            git pull origin master
+            # Остановить старое приложение если запущено
+            pkill -f "uvicorn src.main:app" || true
+            # Установить зависимости
+            pip install -e ".[test]" --user
+            # Запустить приложение в фоне
+            nohup python -m uvicorn src.main:app --host 127.0.0.1 --port 8066 > app.log 2>&1 &
+            echo "Deployed!"
+          EOF
