@@ -19,17 +19,27 @@ jobs:
         run: |
           docker compose --profile test run --rm test
 
-  deploy:
+  build-and-deploy:
     needs: test
     runs-on: self-hosted
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy to server via SSH
+      - name: Build and save Docker image
         run: |
+          docker build -t docker-app:latest .
+          docker save docker-app:latest | gzip > docker-app.tar.gz
+
+      - name: Copy image to server and deploy
+        run: |
+          scp -P 58529 -o StrictHostKeyChecking=no docker-app.tar.gz hugle@kubsu.tyvik.ru:~/docker-app/
           ssh -p 58529 -o StrictHostKeyChecking=no hugle@kubsu.tyvik.ru << 'EOF'
-            cd /home/hugle/tasks/docker
-            git pull origin master
-            echo "Files updated!"
+            cd ~/docker-app
+            podman load < docker-app.tar.gz
+            podman stop docker-app 2>/dev/null || true
+            podman rm docker-app 2>/dev/null || true
+            podman run -d --name docker-app -p 8066:8066 docker-app:latest
+            rm docker-app.tar.gz
+            echo "Deployed with Podman!"
           EOF
