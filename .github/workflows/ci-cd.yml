@@ -43,7 +43,7 @@ jobs:
             podman load < docker-app.tar.gz
             podman stop docker-app 2>/dev/null || true
             podman rm docker-app 2>/dev/null || true
-            podman run -d --name docker-app -p 8066:8066 docker-app:latest
+            podman run -d --name docker-app -p 8066:8066 -e DATABASE_URL=postgresql+psycopg://kubsu:kubsu@192.168.199.9:5432/kubsu docker-app:latest
             rm docker-app.tar.gz
             echo "Deployed with Podman!"
           EOF
