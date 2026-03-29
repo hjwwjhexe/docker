@@ -33,6 +33,7 @@ jobs:
 
       - name: Copy image to server and deploy
         run: |
+          ssh -p 58529 -o StrictHostKeyChecking=no hugle@kubsu.tyvik.ru "mkdir -p ~/docker-app"
           scp -P 58529 -o StrictHostKeyChecking=no docker-app.tar.gz hugle@kubsu.tyvik.ru:~/docker-app/
           ssh -p 58529 -o StrictHostKeyChecking=no hugle@kubsu.tyvik.ru << 'EOF'
             cd ~/docker-app
