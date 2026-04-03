@@ -1,14 +1,10 @@
 from fastapi import FastAPI, Depends, HTTPException
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from src import models, schemas
 from src.database import init_db, get_db
 
 app = FastAPI()
-
-# Serve static files (frontend)
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.on_event("startup")
@@ -74,6 +70,6 @@ async def health_check():
     return {"status": "healthy"}
 
 
-@app.get("/")
-async def root():
-    return {"message": "Users API", "docs": "/docs", "frontend": "/static/index.html"}
+@app.get("/67")
+async def sixty_seven():
+    return {"67": ["67"] * 67 + ["крыса рататуй эта ****** не украдет у меня six seveeeen"]}

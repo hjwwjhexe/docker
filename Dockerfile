@@ -36,7 +36,6 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy application code from builder (including installed package)
 COPY --from=builder /app /app
 COPY tests/ ./tests/
-COPY static/ ./static/
 
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
