@@ -1,5 +1,5 @@
 # Stage 1: Build stage
-#какашки
+
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
