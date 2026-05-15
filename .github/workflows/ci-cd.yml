@@ -12,37 +12,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Build test image
+        run: docker build --target test -t docker-app:test .
 
-      - name: Build and test in Docker
-        run: |
-          docker compose --profile test run --rm test
+      - name: Build runtime image (same pipeline, tested stack)
+        run: docker build --target runtime -t docker-app:latest .
 
-  build-and-deploy:
+      - name: Run pytest in built image with Postgres
+        run: docker compose run --rm test
+
+      - name: Save runtime image for deploy
+        run: docker save docker-app:latest | gzip -1 > docker-app.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docker-app-image
+          path: docker-app.tar.gz
+
+  deploy:
     needs: test
     runs-on: self-hosted
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: docker-app-image
 
-      - name: Build and save Docker image
+      - name: Upload image to server and restart container
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          docker build -t docker-app:latest .
-          docker save docker-app:latest | gzip > docker-app.tar.gz
-
-      - name: Copy image to server and deploy
-        run: |
-          ssh -p 58529 -o StrictHostKeyChecking=no hugle@kubsu.tyvik.ru "mkdir -p ~/docker-app"
-          scp -P 58529 -o StrictHostKeyChecking=no docker-app.tar.gz hugle@kubsu.tyvik.ru:~/docker-app/
-          ssh -p 58529 -o StrictHostKeyChecking=no hugle@kubsu.tyvik.ru << 'EOF'
-            pkill -u $(whoami) -f srv8066.py 2>/dev/null || true
-            sleep 2
-            cd ~/docker-app
-            podman load < docker-app.tar.gz
-            podman stop docker-app 2>/dev/null || true
-            podman rm docker-app 2>/dev/null || true
-            podman run -d --name docker-app --network host -e DATABASE_URL=postgresql+psycopg://kubsu:kubsu@127.0.0.1:5432/kubsu docker-app:latest
-            rm docker-app.tar.gz
-            echo "Deployed with Podman!"
-          EOF
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/kubsu_deploy
+          chmod 600 ~/.ssh/kubsu_deploy
+          ssh-keyscan -p 58529 kubsu.tyvik.ru >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh -i ~/.ssh/kubsu_deploy -p 58529 -o StrictHostKeyChecking=accept-new hugle@kubsu.tyvik.ru "mkdir -p ~/docker-app"
+          scp -i ~/.ssh/kubsu_deploy -P 58529 -o StrictHostKeyChecking=accept-new docker-app.tar.gz hugle@kubsu.tyvik.ru:~/docker-app/
+          ssh -i ~/.ssh/kubsu_deploy -p 58529 -o StrictHostKeyChecking=accept-new hugle@kubsu.tyvik.ru \
+            "bash -lc 'set -euo pipefail; cd ~/docker-app; gunzip -c docker-app.tar.gz | podman load; podman stop docker-app 2>/dev/null || true; podman rm docker-app 2>/dev/null || true; podman run -d --name docker-app --network host -e DATABASE_URL=postgresql+psycopg://kubsu:kubsu@127.0.0.1:5432/kubsu -e PORT=8066 docker-app:latest; rm -f docker-app.tar.gz'"

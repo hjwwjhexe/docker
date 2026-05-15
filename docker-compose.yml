@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:16-alpine
@@ -7,41 +5,21 @@ services:
       POSTGRES_USER: kubsu
       POSTGRES_PASSWORD: kubsu
       POSTGRES_DB: kubsu
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U kubsu -d kubsu"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8066:8066"
-    environment:
-      DATABASE_URL: postgresql+psycopg://kubsu:kubsu@db:5432/kubsu
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-
   test:
+    image: docker-app:test
     build:
       context: .
       dockerfile: Dockerfile
+      target: test
     environment:
       DATABASE_URL: postgresql+psycopg://kubsu:kubsu@db:5432/kubsu
-      PYTHONPATH: /app/src
     depends_on:
       db:
         condition: service_healthy
     working_dir: /app
-    command: ["python", "-m", "pytest", "tests", "-v"]
-    profiles:
-      - test
-
-volumes:
-  postgres_data:

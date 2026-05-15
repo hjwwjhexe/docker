@@ -1,48 +1,41 @@
-# Stage 1: Build stage
-
+# builder: ставим только runtime-зависимости приложения в venv
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy source code
-COPY src/ ./src/
 COPY pyproject.toml .
+COPY src/ ./src/
 
-# Install dependencies into a virtual environment
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir -e ".[test]"
+RUN pip install --no-cache-dir .
 
-# Stage 2: Runtime stage
+# runtime: финальный образ для podman/production (без тестов и pytest)
 FROM python:3.12-slim AS runtime
 
 WORKDIR /app
 
-# Install only runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
+COPY --from=builder /app/src ./src
 
-# Copy application code from builder (including installed package)
-COPY --from=builder /app /app
-COPY tests/ ./tests/
+ENV PORT=8066
+EXPOSE 8066
 
-# Create non-root user for security
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Expose port
-EXPOSE 8066
+CMD ["sh", "-c", "exec uvicorn src.main:app --host 0.0.0.0 --port ${PORT}"]
 
-# Run the application
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8066"]
+# test: слой только для CI (pytest + код тестов)
+FROM runtime AS test
+
+USER root
+COPY pyproject.toml .
+COPY tests/ ./tests/
+RUN pip install --no-cache-dir ".[test]" \
+    && chown -R appuser:appuser /app/tests
+USER appuser
+
+WORKDIR /app
+CMD ["python", "-m", "pytest", "tests", "-v"]
